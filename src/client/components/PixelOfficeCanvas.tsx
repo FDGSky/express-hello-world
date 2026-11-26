@@ -941,8 +941,12 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
         </span>
       </div>
 
-      <div className="w-full flex-1 relative bg-[#1e1b2e] flex items-center justify-center overflow-hidden p-1">
-        <canvas ref={canvasRef} className="w-full h-full block pixel-canvas rounded" />
+      <div className="w-full flex-1 relative bg-[#1e1b2e] flex items-center justify-center overflow-hidden p-2">
+        <canvas
+          ref={canvasRef}
+          style={{ aspectRatio: '480 / 290' }}
+          className="w-full max-h-full h-auto block pixel-canvas rounded shadow-inner"
+        />
       </div>
 
       <div className="gba-dialog text-[#1e1b2e] px-3.5 py-2.5 flex flex-col justify-between min-h-[112px] font-pixel">
