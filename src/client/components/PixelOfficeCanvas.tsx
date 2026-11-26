@@ -1,9 +1,9 @@
-import React, { useEffect, useRef } from 'react';
-import type { OfficeEvent, OfficeStage, Organization } from '../../shared/types.js';
+import React, { useEffect, useRef, useState } from 'react';
+import type { OfficeEvent, Organization } from '../../shared/types.js';
 
 interface PixelOfficeCanvasProps {
   activeOrg: Organization;
-  latestEvent: OfficeEvent | null;
+  eventQueue: OfficeEvent[];
   pendingBossCount: number;
   totalProcessed: number;
   totalBlocked: number;
@@ -16,8 +16,7 @@ interface AgentSprite {
   y: number;
   homeX: number;
   homeY: number;
-  targetX: number;
-  targetY: number;
+  waypoints: Array<{ x: number; y: number }>;
   hair: string;
   hairHi: string;
   shirt: string;
@@ -29,6 +28,7 @@ interface AgentSprite {
   headset?: boolean;
   mustache?: boolean;
   carryColor: string | null;
+  workingTimer: number;
   bubble: string;
   bubbleColor: string;
   bubbleTimer: number;
@@ -48,14 +48,28 @@ const LOGICAL_H = 290;
 
 export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
   activeOrg,
-  latestEvent,
+  eventQueue,
   pendingBossCount,
   totalProcessed,
   totalBlocked,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [currentEvent, setCurrentEvent] = useState<OfficeEvent | null>(null);
+  const playedIdsRef = useRef<Set<string>>(new Set());
+  const pendingPlayRef = useRef<OfficeEvent[]>([]);
+  const playingTimerRef = useRef<number | null>(null);
+
   const activeOrgRef = useRef<Organization>(activeOrg);
   const pendingBossRef = useRef<number>(pendingBossCount);
+  const activeStationRef = useRef<{ zone: string; color: string; timer: number }>({
+    zone: '',
+    color: '#38bdf8',
+    timer: 0,
+  });
+  const tableFolderRef = useRef<{ visible: boolean; color: string }>({
+    visible: false,
+    color: '#38bdf8',
+  });
   const scanBeamRef = useRef<{ active: boolean; color: string; timer: number }>({
     active: false,
     color: '#22c55e',
@@ -81,9 +95,9 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
   // Office Mascot: "Bandit" the pixel office cat
   const mascotRef = useRef({
     x: 240,
-    y: 112,
+    y: 128,
     targetX: 240,
-    targetY: 112,
+    targetY: 128,
     pauseTimer: 90,
     bubble: '',
     bubbleTimer: 0,
@@ -98,8 +112,7 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
       y: 92,
       homeX: 62,
       homeY: 92,
-      targetX: 62,
-      targetY: 92,
+      waypoints: [],
       hair: '#5c3a1e',
       hairHi: '#7c532e',
       shirt: '#eab308',
@@ -108,6 +121,7 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
       skinShade: '#eab676',
       glasses: true,
       carryColor: null,
+      workingTimer: 0,
       bubble: '',
       bubbleColor: '#facc15',
       bubbleTimer: 0,
@@ -120,8 +134,7 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
       y: 214,
       homeX: 64,
       homeY: 214,
-      targetX: 64,
-      targetY: 214,
+      waypoints: [],
       hair: '#9a4714',
       hairHi: '#c26525',
       shirt: '#fce7f3',
@@ -130,12 +143,12 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
       skinShade: '#f3cf72',
       headset: true,
       carryColor: null,
+      workingTimer: 0,
       bubble: '',
       bubbleColor: '#38bdf8',
       bubbleTimer: 0,
       bobOffset: 1.4,
     },
-    // Dedicated Verification Agents (Brand Coherence & Message Coherence)
     brand_ver: {
       key: 'brand_ver',
       label: 'BRAND QA',
@@ -143,8 +156,7 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
       y: 98,
       homeX: 170,
       homeY: 98,
-      targetX: 170,
-      targetY: 98,
+      waypoints: [],
       hair: '#1e293b',
       hairHi: '#475569',
       shirt: '#e0f2fe',
@@ -154,6 +166,7 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
       skinShade: '#f3bc82',
       glasses: true,
       carryColor: null,
+      workingTimer: 0,
       bubble: '',
       bubbleColor: '#38bdf8',
       bubbleTimer: 0,
@@ -166,8 +179,7 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
       y: 98,
       homeX: 244,
       homeY: 98,
-      targetX: 244,
-      targetY: 98,
+      waypoints: [],
       hair: '#78350f',
       hairHi: '#b45309',
       shirt: '#fef3c7',
@@ -175,12 +187,12 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
       skin: '#fbd38d',
       skinShade: '#e5b86e',
       carryColor: null,
+      workingTimer: 0,
       bubble: '',
       bubbleColor: '#f59e0b',
       bubbleTimer: 0,
       bobOffset: 3.1,
     },
-    // 4-AI Jury in Conference Room
     claude: {
       key: 'claude',
       label: 'CLAUDE',
@@ -188,8 +200,7 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
       y: 184,
       homeX: 184,
       homeY: 184,
-      targetX: 184,
-      targetY: 184,
+      waypoints: [],
       hair: '#451a03',
       hairHi: '#6b2f0e',
       shirt: '#f8fafc',
@@ -197,6 +208,7 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
       skin: '#fed7aa',
       skinShade: '#eabf91',
       carryColor: null,
+      workingTimer: 0,
       bubble: '',
       bubbleColor: '#f59e0b',
       bubbleTimer: 0,
@@ -209,8 +221,7 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
       y: 184,
       homeX: 242,
       homeY: 184,
-      targetX: 242,
-      targetY: 184,
+      waypoints: [],
       hair: '#1e1b4b',
       hairHi: '#3730a3',
       shirt: '#e0f2fe',
@@ -218,6 +229,7 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
       skin: '#fcd34d',
       skinShade: '#eab308',
       carryColor: null,
+      workingTimer: 0,
       bubble: '',
       bubbleColor: '#38bdf8',
       bubbleTimer: 0,
@@ -230,8 +242,7 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
       y: 244,
       homeX: 184,
       homeY: 244,
-      targetX: 184,
-      targetY: 244,
+      waypoints: [],
       hair: '#1f2937',
       hairHi: '#374151',
       shirt: '#d1fae5',
@@ -241,6 +252,7 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
       glasses: true,
       mustache: true,
       carryColor: null,
+      workingTimer: 0,
       bubble: '',
       bubbleColor: '#10b981',
       bubbleTimer: 0,
@@ -253,8 +265,7 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
       y: 244,
       homeX: 242,
       homeY: 244,
-      targetX: 242,
-      targetY: 244,
+      waypoints: [],
       hair: '#52525b',
       hairHi: '#71717a',
       shirt: '#f3e8ff',
@@ -264,6 +275,7 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
       skinShade: '#e5b887',
       glasses: true,
       carryColor: null,
+      workingTimer: 0,
       bubble: '',
       bubbleColor: '#a855f7',
       bubbleTimer: 0,
@@ -276,8 +288,7 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
       y: 94,
       homeX: 396,
       homeY: 94,
-      targetX: 396,
-      targetY: 94,
+      waypoints: [],
       hair: '#111827',
       hairHi: '#334155',
       shirt: '#f8fafc',
@@ -286,6 +297,7 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
       skin: '#fbd38d',
       skinShade: '#e3b870',
       carryColor: null,
+      workingTimer: 0,
       bubble: '',
       bubbleColor: '#fbbf24',
       bubbleTimer: 0,
@@ -301,16 +313,62 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
     pendingBossRef.current = pendingBossCount;
   }, [pendingBossCount]);
 
+  // Enqueue any unseen events and play them sequentially with 1.15s pacing so every walk/action is clearly visible
   useEffect(() => {
-    if (!latestEvent) return;
-    const ag = agentsRef.current;
-    const folderColor = latestEvent.orgSlug === 'cleaning' ? '#38bdf8' : '#a78bfa';
+    if (eventQueue.length === 0) {
+      playedIdsRef.current.clear();
+      pendingPlayRef.current = [];
+      setCurrentEvent(null);
+      return;
+    }
 
-    const setBubble = (key: string, text: string, color: string, duration = 145) => {
+    let added = false;
+    for (const evt of eventQueue) {
+      if (!playedIdsRef.current.has(evt.id)) {
+        playedIdsRef.current.add(evt.id);
+        pendingPlayRef.current.push(evt);
+        added = true;
+      }
+    }
+
+    const pump = () => {
+      if (pendingPlayRef.current.length === 0) {
+        playingTimerRef.current = null;
+        return;
+      }
+      const next = pendingPlayRef.current.shift()!;
+      setCurrentEvent(next);
+      playingTimerRef.current = window.setTimeout(pump, 1150);
+    };
+
+    if (added && playingTimerRef.current === null) {
+      pump();
+    }
+  }, [eventQueue]);
+
+  useEffect(() => {
+    return () => {
+      if (playingTimerRef.current !== null) clearTimeout(playingTimerRef.current);
+    };
+  }, []);
+
+  // Choreograph physical multi-waypoint agent actions for the active event
+  useEffect(() => {
+    if (!currentEvent) return;
+    const ag = agentsRef.current;
+    const folderColor = currentEvent.orgSlug === 'cleaning' ? '#38bdf8' : '#a78bfa';
+
+    const setBubble = (key: string, text: string, color: string, duration = 140) => {
       if (!ag[key]) return;
       ag[key].bubble = text;
       ag[key].bubbleColor = color;
       ag[key].bubbleTimer = duration;
+    };
+
+    const walk = (key: string, pts: Array<{ x: number; y: number }>, carry: string | null) => {
+      if (!ag[key]) return;
+      ag[key].waypoints = pts.map((p) => ({ ...p }));
+      ag[key].carryColor = carry;
     };
 
     const launchTruck = (color: string) => {
@@ -323,89 +381,120 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
       };
     };
 
-    switch (latestEvent.stage) {
+    switch (currentEvent.stage) {
       case 'incoming_sms':
-        fxRef.current.push({ x: 30, y: 60, text: `SMS ${latestEvent.ticketCode}`, color: '#34d399', life: 85 });
-        ag.dwight.targetX = 40;
-        ag.dwight.targetY = 88;
-        ag.dwight.carryColor = folderColor;
-        setBubble('dwight', 'HALT! SCANNING', '#facc15', 140);
+        activeStationRef.current = { zone: 'security', color: '#38bdf8', timer: 110 };
+        fxRef.current.push({ x: 24, y: 74, text: `SMS ${currentEvent.ticketCode}!`, color: '#34d399', life: 95 });
+        walk('dwight', [{ x: 26, y: 86 }, { x: 62, y: 92 }], folderColor);
+        setBubble('dwight', 'HALT! GRABBING SMS', '#facc15', 140);
         break;
 
       case 'security_scanning':
-        ag.dwight.targetX = 62;
-        ag.dwight.targetY = 92;
+        activeStationRef.current = { zone: 'security', color: '#38bdf8', timer: 120 };
         ag.dwight.carryColor = folderColor;
+        ag.dwight.workingTimer = 90;
         scanBeamRef.current = { active: true, color: '#38bdf8', timer: 115 };
-        setBubble('dwight', 'VT + MAGIC BYTES', '#38bdf8', 150);
+        setBubble('dwight', 'SCANNING VIRUS/URL', '#38bdf8', 145);
         break;
 
       case 'security_blocked':
+        activeStationRef.current = { zone: 'security', color: '#ef4444', timer: 160 };
         scanBeamRef.current = { active: true, color: '#ef4444', timer: 165 };
         ag.dwight.carryColor = '#ef4444';
-        setBubble('dwight', 'THREAT BLOCKED!', '#ef4444', 200);
+        setBubble('dwight', 'THREAT BLOCKED!', '#ef4444', 190);
         mascotRef.current.bubble = 'HISS! 😾';
-        mascotRef.current.bubbleTimer = 100;
-        fxRef.current.push({ x: 62, y: 54, text: 'QUARANTINED!', color: '#f43f5e', life: 115 });
+        mascotRef.current.bubbleTimer = 110;
+        fxRef.current.push({ x: 62, y: 54, text: 'QUARANTINED!', color: '#f43f5e', life: 120 });
         setTimeout(() => {
-          ag.dwight.targetX = ag.dwight.homeX;
-          ag.dwight.targetY = ag.dwight.homeY;
-          ag.dwight.carryColor = null;
-        }, 1400);
+          walk('dwight', [{ x: ag.dwight.homeX, y: ag.dwight.homeY }], null);
+        }, 1200);
         break;
 
       case 'security_passed':
+        activeStationRef.current = { zone: 'reception', color: '#22c55e', timer: 110 };
         scanBeamRef.current = { active: true, color: '#22c55e', timer: 70 };
-        setBubble('dwight', 'CLEAR! PASSING', '#22c55e', 110);
-        ag.dwight.targetX = 64;
-        ag.dwight.targetY = 162;
-        ag.dwight.carryColor = folderColor;
-        fxRef.current.push({ x: 64, y: 66, text: 'SAFE ✓', color: '#4ade80', life: 70 });
+        setBubble('dwight', 'SAFE! TO PAM', '#22c55e', 110);
+        walk(
+          'dwight',
+          [{ x: 62, y: 174 }, { x: ag.dwight.homeX, y: ag.dwight.homeY }],
+          folderColor
+        );
+        fxRef.current.push({ x: 64, y: 66, text: 'SAFE ✓', color: '#4ade80', life: 80 });
         break;
 
       case 'agent_drafting':
-        ag.dwight.targetX = ag.dwight.homeX;
-        ag.dwight.targetY = ag.dwight.homeY;
+        activeStationRef.current = { zone: 'qa', color: folderColor, timer: 130 };
         ag.dwight.carryColor = null;
-        ag.pam.targetX = 122;
-        ag.pam.targetY = 156;
-        ag.pam.carryColor = folderColor;
-        setBubble('pam', 'DRAFTING REPLY', '#38bdf8', 135);
-        setBubble('brand_ver', 'BRAND CHECK...', '#38bdf8', 145);
-        setBubble('msg_ver', 'MSG CHECK...', '#f59e0b', 145);
+        // Pam physically walks up to Cleaning/Realty DB Cabinet, checks EST Cal, then drops off at Brand/Msg QA!
+        walk(
+          'pam',
+          [
+            { x: 122, y: 180 },
+            { x: currentEvent.orgSlug === 'cleaning' ? 162 : 212, y: 74 },
+            { x: 262, y: 74 },
+            { x: 205, y: 118 },
+            { x: ag.pam.homeX, y: ag.pam.homeY },
+          ],
+          folderColor
+        );
+        ag.brand_ver.workingTimer = 110;
+        ag.msg_ver.workingTimer = 110;
         ag.brand_ver.carryColor = folderColor;
         ag.msg_ver.carryColor = folderColor;
+        setBubble('pam', 'DB + CAL → DRAFT!', '#38bdf8', 135);
+        setBubble('brand_ver', 'BRAND CHECK...', '#38bdf8', 145);
+        setBubble('msg_ver', 'MSG CHECK...', '#f59e0b', 145);
+        fxRef.current.push({
+          x: currentEvent.orgSlug === 'cleaning' ? 162 : 212,
+          y: 52,
+          text: currentEvent.orgSlug === 'cleaning' ? 'CLEANING DB!' : 'REALTY DB!',
+          color: folderColor,
+          life: 90,
+        });
         break;
 
       case 'jury_deliberating':
-        ag.pam.targetX = ag.pam.homeX;
-        ag.pam.targetY = ag.pam.homeY;
-        ag.pam.carryColor = null;
-        ag.brand_ver.carryColor = null;
+        activeStationRef.current = { zone: 'jury', color: '#a855f7', timer: 140 };
+        tableFolderRef.current = { visible: true, color: folderColor };
+        // Brand QA physically walks down into the Conference Room to deliver the folder to the 4-AI Jury!
+        walk(
+          'brand_ver',
+          [{ x: 124, y: 132 }, { x: 124, y: 206 }, { x: 158, y: 206 }, { x: 124, y: 132 }, { x: ag.brand_ver.homeX, y: ag.brand_ver.homeY }],
+          folderColor
+        );
         ag.msg_ver.carryColor = null;
-        setBubble('brand_ver', 'BRAND OK → JURY', '#4ade80', 100);
-        setBubble('msg_ver', 'MSG OK → JURY', '#4ade80', 100);
-        setBubble('claude', 'BRAND AUDIT...', '#f59e0b', 145);
-        setBubble('gemini', 'CONTEXT AUDIT...', '#38bdf8', 145);
-        setBubble('gpt', 'TONE AUDIT...', '#10b981', 145);
-        setBubble('deepseek', 'POLICY AUDIT...', '#a855f7', 145);
+        ag.claude.workingTimer = 120;
+        ag.gemini.workingTimer = 120;
+        ag.gpt.workingTimer = 120;
+        ag.deepseek.workingTimer = 120;
+        setBubble('brand_ver', 'DELIVERING TO JURY', '#4ade80', 110);
+        setBubble('claude', 'BRAND AUDIT...', '#f59e0b', 140);
+        setBubble('gemini', 'CONTEXT AUDIT...', '#38bdf8', 140);
+        setBubble('gpt', 'TONE AUDIT...', '#10b981', 140);
+        setBubble('deepseek', 'POLICY AUDIT...', '#a855f7', 140);
         break;
 
       case 'jury_rewrite':
-        ag.michael.targetX = 330;
-        ag.michael.targetY = 132;
-        ag.michael.carryColor = '#f43f5e';
+        activeStationRef.current = { zone: 'boss', color: '#f43f5e', timer: 120 };
+        walk('michael', [{ x: 324, y: 124 }, { x: ag.michael.homeX, y: ag.michael.homeY }], '#f43f5e');
         setBubble('michael', 'REWRITE THIS!', '#f43f5e', 145);
         setBubble('pam', 'REWRITING, BOSS!', '#f9a8d4', 135);
         break;
 
       case 'boss_pending':
-        ag.michael.targetX = ag.michael.homeX;
-        ag.michael.targetY = ag.michael.homeY;
+        activeStationRef.current = { zone: 'boss', color: '#fbbf24', timer: 180 };
+        tableFolderRef.current.visible = false;
+        // Claude physically carries the audited folder from Conference Room to the Boss's Corner Office!
+        walk(
+          'claude',
+          [{ x: 126, y: 206 }, { x: 126, y: 132 }, { x: 326, y: 120 }, { x: 126, y: 132 }, { x: ag.claude.homeX, y: ag.claude.homeY }],
+          folderColor
+        );
         ag.michael.carryColor = folderColor;
+        ag.michael.workingTimer = 120;
         setBubble('michael', 'REVIEWING DRAFT', '#fbbf24', 220);
-        if (latestEvent.jurorVotes) {
-          for (const v of latestEvent.jurorVotes) {
+        if (currentEvent.jurorVotes) {
+          for (const v of currentEvent.jurorVotes) {
             setBubble(
               v.jurorId,
               `${v.overallScore}% ${v.vote === 'approve' ? '✓' : '⚠'}`,
@@ -414,41 +503,57 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
             );
           }
         }
-        fxRef.current.push({ x: 396, y: 50, text: 'BOSS APPROVAL!', color: '#fbbf24', life: 115 });
+        fxRef.current.push({ x: 396, y: 50, text: 'BOSS APPROVAL!', color: '#fbbf24', life: 120 });
         break;
 
       case 'auto_sent':
-        if (latestEvent.jurorVotes) {
-          for (const v of latestEvent.jurorVotes) {
+        activeStationRef.current = { zone: 'dock', color: '#34d399', timer: 150 };
+        tableFolderRef.current.visible = false;
+        if (currentEvent.jurorVotes) {
+          for (const v of currentEvent.jurorVotes) {
             setBubble(v.jurorId, `${v.overallScore}% ✓`, '#4ade80', 150);
           }
         }
+        // Claude walks papers to the SMS Express Truck!
+        walk(
+          'claude',
+          [{ x: 322, y: 224 }, { x: 368, y: 232 }, { x: ag.claude.homeX, y: ag.claude.homeY }],
+          folderColor
+        );
         launchTruck(folderColor);
         mascotRef.current.bubble = 'PURR ♥';
-        mascotRef.current.bubbleTimer = 110;
-        fxRef.current.push({ x: 400, y: 210, text: 'TRUCK DISPATCH!', color: '#34d399', life: 115 });
+        mascotRef.current.bubbleTimer = 120;
+        fxRef.current.push({ x: 400, y: 205, text: 'TRUCK DISPATCH!', color: '#34d399', life: 120 });
         break;
 
       case 'boss_approved':
-        ag.michael.carryColor = null;
+        activeStationRef.current = { zone: 'dock', color: '#22c55e', timer: 160 };
+        ag.michael.carryColor = '#22c55e';
+        // Boss Michael walks down to load the approved papers into the SMS Express Truck!
+        walk(
+          'michael',
+          [{ x: 326, y: 120 }, { x: 326, y: 228 }, { x: 368, y: 232 }, { x: 326, y: 120 }, { x: ag.michael.homeX, y: ag.michael.homeY }],
+          '#22c55e'
+        );
         setBubble('michael', 'APPROVED! SHIP IT!', '#22c55e', 165);
         launchTruck(folderColor);
         mascotRef.current.bubble = 'MEOW! ♥';
-        mascotRef.current.bubbleTimer = 110;
-        fxRef.current.push({ x: 396, y: 50, text: 'STAMPED ✓', color: '#4ade80', life: 100 });
-        fxRef.current.push({ x: 400, y: 210, text: 'PAPERS LOADED!', color: '#38bdf8', life: 110 });
+        mascotRef.current.bubbleTimer = 120;
+        fxRef.current.push({ x: 396, y: 50, text: 'STAMPED ✓', color: '#4ade80', life: 110 });
+        fxRef.current.push({ x: 400, y: 205, text: 'PAPERS LOADED!', color: '#38bdf8', life: 120 });
         break;
 
       case 'boss_rejected':
+        activeStationRef.current = { zone: 'boss', color: '#ef4444', timer: 140 };
         ag.michael.carryColor = null;
         setBubble('michael', 'REJECTED & LOGGED', '#ef4444', 170);
-        fxRef.current.push({ x: 396, y: 50, text: 'LOGGED REJECT ✕', color: '#f43f5e', life: 110 });
+        fxRef.current.push({ x: 396, y: 50, text: 'LOGGED REJECT ✕', color: '#f43f5e', life: 115 });
         break;
 
       default:
         break;
     }
-  }, [latestEvent]);
+  }, [currentEvent]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -644,22 +749,42 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
     };
 
     const drawCharacter = (a: AgentSprite) => {
-      const dx = a.targetX - a.x;
-      const dy = a.targetY - a.y;
-      const dist = Math.hypot(dx, dy);
-      const walking = dist > 1.2;
-
-      if (walking) {
-        a.x += (dx / dist) * 1.65;
-        a.y += (dy / dist) * 1.65;
-      } else {
-        a.x = a.targetX;
-        a.y = a.targetY;
+      let walking = false;
+      if (a.waypoints.length > 0) {
+        const next = a.waypoints[0];
+        const dx = next.x - a.x;
+        const dy = next.y - a.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 2.2) {
+          walking = true;
+          a.x += (dx / dist) * 2.25;
+          a.y += (dy / dist) * 2.25;
+        } else {
+          a.x = next.x;
+          a.y = next.y;
+          a.waypoints.shift();
+          if (a.waypoints.length === 0 && Math.hypot(a.x - a.homeX, a.y - a.homeY) < 4) {
+            a.carryColor = null;
+          }
+        }
       }
 
-      const bob = walking ? Math.sin(frame * 0.35) * 1.4 : Math.sin(frame * 0.08 + a.bobOffset) * 0.45;
+      const working = a.workingTimer > 0;
+      if (working) a.workingTimer--;
+
+      const bob = walking
+        ? Math.sin(frame * 0.42) * 1.6
+        : working
+          ? Math.sin(frame * 0.55 + a.bobOffset) * 1.1
+          : Math.sin(frame * 0.08 + a.bobOffset) * 0.45;
       const cx = Math.round(a.x);
       const cy = Math.round(a.y + bob);
+
+      // Typing / thinking sparks above active working agents
+      if (working && !walking && frame % 12 < 6) {
+        px(cx - 10, cy - 12, 2, 2, '#facc15');
+        px(cx + 8, cy - 14, 2, 2, '#38bdf8');
+      }
 
       // Soft ground shadow
       px(cx - 7, a.y + 10, 14, 3, 'rgba(15, 23, 42, 0.34)');
@@ -866,6 +991,12 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
       px(176, 217, 12, 7, '#f1f5f9');
       px(238, 217, 12, 7, '#f1f5f9');
       drawText('BRAND + CONTEXT', 214, 217, '#fde68a', 4.8, 'center');
+      if (tableFolderRef.current.visible) {
+        const glow = frame % 16 < 8;
+        px(206, 204, 16, 10, glow ? '#fef08a' : '#0f172a');
+        px(208, 206, 12, 6, tableFolderRef.current.color);
+        px(210, 208, 8, 2, '#ffffff');
+      }
 
       // 7. ZONE 5 (Top-Right): BOSS CORNER OFFICE (MICHAEL)
       px(336, 40, 138, 114, '#e0d8c7');
@@ -924,11 +1055,11 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
     };
   }, []);
 
-  const speaker = latestEvent?.speaker || 'MINI OFFICE HQ';
+  const speaker = currentEvent?.speaker || 'MINI OFFICE HQ';
   const dialogText =
-    latestEvent?.message ||
+    currentEvent?.message ||
     'Send a customer SMS (text, photo, PDF, or link) to watch Security Dwight, Reception Pam, Brand & Message QA, the 4-AI Jury, Boss Michael, Bandit the Cat, and the SMS Delivery Truck!';
-  const pill = latestEvent?.statusPill || 'IDLE • READY';
+  const pill = currentEvent?.statusPill || 'IDLE • READY';
 
   return (
     <div className="flex flex-col justify-between rounded-xl overflow-hidden gba-frame bg-[#1e1b2e] h-full min-h-[480px]">

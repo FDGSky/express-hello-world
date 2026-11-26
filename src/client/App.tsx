@@ -32,7 +32,7 @@ export const App: React.FC = () => {
 
   const [data, setData] = useState<BootstrapPayload | null>(null);
   const [activeOrgSlug, setActiveOrgSlug] = useState<'cleaning' | 'real_estate'>('cleaning');
-  const [latestEvent, setLatestEvent] = useState<OfficeEvent | null>(null);
+  const [eventQueue, setEventQueue] = useState<OfficeEvent[]>([]);
   const [sending, setSending] = useState(false);
   const [busyTicketId, setBusyTicketId] = useState<string | null>(null);
   const [showRulesModal, setShowRulesModal] = useState(false);
@@ -62,7 +62,7 @@ export const App: React.FC = () => {
         }
         await loadAll();
         cleanupSse = subscribeOfficeEvents((evt) => {
-          setLatestEvent(evt);
+          setEventQueue((prev) => [...prev.slice(-24), evt]);
           if (
             evt.stage === 'boss_pending' ||
             evt.stage === 'auto_sent' ||
@@ -149,7 +149,95 @@ export const App: React.FC = () => {
     setSending(true);
     setErrorBanner('');
     try {
-      await sendCustomerSms(params);
+      const { ticket } = await sendCustomerSms(params);
+      // Guarantee full visual choreography even if SSE was buffered by a proxy
+      setEventQueue((prev) => {
+        const alreadyHas = prev.some((e) => e.ticketCode === ticket.ticketCode);
+        if (alreadyHas) return prev;
+        const synthetic: OfficeEvent[] = [
+          {
+            id: `syn_1_${ticket.id}`,
+            stage: 'incoming_sms',
+            ticketCode: ticket.ticketCode,
+            orgSlug: ticket.orgSlug,
+            speaker: 'INCOMING SMS GATEWAY',
+            message: `New SMS for ${ticket.orgName} arrived at the door!`,
+            statusPill: `${ticket.ticketCode} • INCOMING`,
+            timestamp: new Date().toISOString(),
+          },
+          {
+            id: `syn_2_${ticket.id}`,
+            stage: 'security_scanning',
+            ticketCode: ticket.ticketCode,
+            orgSlug: ticket.orgSlug,
+            speaker: 'SECURITY DESK (DWIGHT)',
+            message: 'Scanning message, links, and files with Magic Bytes, URLhaus & VirusTotal...',
+            statusPill: `${ticket.ticketCode} • SCANNING`,
+            timestamp: new Date().toISOString(),
+          },
+        ];
+        if (ticket.status === 'quarantined') {
+          synthetic.push({
+            id: `syn_3_${ticket.id}`,
+            stage: 'security_blocked',
+            ticketCode: ticket.ticketCode,
+            orgSlug: ticket.orgSlug,
+            speaker: 'SECURITY DESK — RED ALERT!',
+            message: ticket.escalationReasons[0] || 'Threat quarantined before reaching AI agents!',
+            statusPill: `${ticket.ticketCode} • BLOCKED`,
+            timestamp: new Date().toISOString(),
+          });
+        } else {
+          synthetic.push(
+            {
+              id: `syn_3_${ticket.id}`,
+              stage: 'security_passed',
+              ticketCode: ticket.ticketCode,
+              orgSlug: ticket.orgSlug,
+              speaker: 'SECURITY DESK (DWIGHT)',
+              message: 'Scan cleared! Handing verified folder to Reception Pam.',
+              statusPill: `${ticket.ticketCode} • SAFE`,
+              timestamp: new Date().toISOString(),
+            },
+            {
+              id: `syn_4_${ticket.id}`,
+              stage: 'agent_drafting',
+              ticketCode: ticket.ticketCode,
+              orgSlug: ticket.orgSlug,
+              speaker: 'RECEPTION (PAM) → QA DESKS',
+              message: `Checking ${ticket.orgName} DB & EST Calendar, drafting reply and passing to Brand/Msg QA.`,
+              statusPill: `${ticket.ticketCode} • DRAFT + QA`,
+              timestamp: new Date().toISOString(),
+            },
+            {
+              id: `syn_5_${ticket.id}`,
+              stage: 'jury_deliberating',
+              ticketCode: ticket.ticketCode,
+              orgSlug: ticket.orgSlug,
+              speaker: 'CONFERENCE ROOM — 4-AI JURY',
+              message: 'Claude, Gemini, GPT & DeepSeek are deliberating on Brand & Context coherence...',
+              statusPill: `${ticket.ticketCode} • 4-AI JURY`,
+              jurorVotes: ticket.juryVerdicts,
+              timestamp: new Date().toISOString(),
+            },
+            {
+              id: `syn_6_${ticket.id}`,
+              stage: ticket.status === 'auto_sent' ? 'auto_sent' : 'boss_pending',
+              ticketCode: ticket.ticketCode,
+              orgSlug: ticket.orgSlug,
+              speaker: ticket.status === 'auto_sent' ? 'AUTO-PILOT → SMS TRUCK' : 'BOSS CORNER OFFICE',
+              message:
+                ticket.status === 'auto_sent'
+                  ? `Unanimous Jury approval (${ticket.avgOverallScore}/100)! Loading papers into SMS Express Truck.`
+                  : `Delivered to Boss desk for manual approval (${ticket.avgOverallScore}/100 Jury score).`,
+              statusPill: ticket.status === 'auto_sent' ? `${ticket.ticketCode} • SHIPPED` : `${ticket.ticketCode} • BOSS QUEUE`,
+              jurorVotes: ticket.juryVerdicts,
+              timestamp: new Date().toISOString(),
+            }
+          );
+        }
+        return [...prev.slice(-16), ...synthetic];
+      });
       await loadAll();
     } catch (err) {
       setErrorBanner((err as Error).message);
@@ -166,7 +254,33 @@ export const App: React.FC = () => {
   }) => {
     setBusyTicketId(params.ticketId);
     try {
-      await sendBossDecision(params);
+      const { ticket } = await sendBossDecision(params);
+      setEventQueue((prev) => [
+        ...prev.slice(-20),
+        {
+          id: `syn_dec_${Date.now()}`,
+          stage:
+            params.action === 'reject'
+              ? 'boss_rejected'
+              : params.action === 'rewrite'
+                ? 'jury_rewrite'
+                : 'boss_approved',
+          ticketCode: ticket.ticketCode,
+          orgSlug: ticket.orgSlug,
+          speaker: 'BOSS CORNER OFFICE',
+          message:
+            params.action === 'reject'
+              ? `Ticket ${ticket.ticketCode} rejected and saved to Rejected Log.`
+              : params.action === 'rewrite'
+                ? `Boss requested rewrite on ${ticket.ticketCode}.`
+                : `Approved! Papers loaded into SMS Express Truck and dispatched!`,
+          statusPill:
+            params.action === 'reject'
+              ? `${ticket.ticketCode} • REJECTED`
+              : `${ticket.ticketCode} • SHIPPED`,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
       await loadAll();
     } catch (err) {
       setErrorBanner((err as Error).message);
@@ -183,7 +297,7 @@ export const App: React.FC = () => {
 
   const handleReset = async () => {
     await resetDemoData();
-    setLatestEvent(null);
+    setEventQueue([]);
     await loadAll();
   };
 
@@ -280,7 +394,7 @@ export const App: React.FC = () => {
         <section className={`lg:col-span-6 min-h-0 ${mobileTab === 'office' ? 'block' : 'hidden lg:block'}`}>
           <PixelOfficeCanvas
             activeOrg={activeOrg}
-            latestEvent={latestEvent}
+            eventQueue={eventQueue}
             pendingBossCount={pendingBossCount}
             totalProcessed={data.tickets.length}
             totalBlocked={totalBlocked}
