@@ -188,9 +188,9 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col p-2.5 md:p-4 pb-20 lg:pb-4 max-w-[1520px] mx-auto space-y-3">
+    <div className="min-h-screen lg:h-screen flex flex-col p-2.5 md:p-3.5 pb-20 lg:pb-3.5 max-w-[1680px] mx-auto space-y-2.5 lg:overflow-hidden">
       {/* Top HQ Control Bar */}
-      <header className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl bg-[#131924] border-2 border-[#263145]">
+      <header className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 rounded-xl bg-[#131924] border-2 border-[#263145] shrink-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="px-2.5 py-1 rounded bg-amber-500 text-slate-950 font-pixel font-extrabold text-[11px]">
             MINI OFFICE AI
@@ -259,14 +259,14 @@ export const App: React.FC = () => {
       </header>
 
       {errorBanner && (
-        <div className="rounded-lg bg-rose-950/70 border border-rose-500/50 px-3 py-2 text-xs text-rose-200 font-semibold">
+        <div className="rounded-lg bg-rose-950/70 border border-rose-500/50 px-3 py-2 text-xs text-rose-200 font-semibold shrink-0">
           {errorBanner}
         </div>
       )}
 
-      {/* 3-Column Desktop Workstation / Tabbed iPhone PWA Layout */}
-      <main className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-stretch">
-        <section className={`lg:col-span-3 ${mobileTab === 'sms' ? 'block' : 'hidden lg:block'}`}>
+      {/* 3-Column Desktop Workstation (3 / 6 / 3) / Tabbed iPhone PWA Layout */}
+      <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch">
+        <section className={`lg:col-span-3 min-h-0 ${mobileTab === 'sms' ? 'block' : 'hidden lg:block'}`}>
           <CustomerSmsPanel
             organizations={data.organizations}
             activeOrg={activeOrg}
@@ -277,7 +277,7 @@ export const App: React.FC = () => {
           />
         </section>
 
-        <section className={`lg:col-span-5 ${mobileTab === 'office' ? 'block' : 'hidden lg:block'}`}>
+        <section className={`lg:col-span-6 min-h-0 ${mobileTab === 'office' ? 'block' : 'hidden lg:block'}`}>
           <PixelOfficeCanvas
             activeOrg={activeOrg}
             latestEvent={latestEvent}
@@ -287,7 +287,7 @@ export const App: React.FC = () => {
           />
         </section>
 
-        <section className={`lg:col-span-4 ${mobileTab === 'boss' ? 'block' : 'hidden lg:block'}`}>
+        <section className={`lg:col-span-3 min-h-0 ${mobileTab === 'boss' ? 'block' : 'hidden lg:block'}`}>
           <BossApprovalPanel
             tickets={data.tickets}
             busyTicketId={busyTicketId}

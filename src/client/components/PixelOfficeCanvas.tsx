@@ -931,8 +931,8 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
   const pill = latestEvent?.statusPill || 'IDLE • READY';
 
   return (
-    <div className="flex flex-col justify-between rounded-xl overflow-hidden gba-frame bg-[#1e1b2e] h-full min-h-[500px] lg:min-h-[620px]">
-      <div className="bg-[#2b2640] px-3 py-1.5 flex items-center justify-between gap-2 text-[11px] border-b-2 border-[#14111f] font-pixel">
+    <div className="flex flex-col justify-between rounded-xl overflow-hidden gba-frame bg-[#1e1b2e] h-full min-h-[480px]">
+      <div className="bg-[#2b2640] px-3 py-1.5 flex items-center justify-between gap-2 text-[11px] border-b-2 border-[#14111f] font-pixel shrink-0">
         <span className="font-extrabold text-amber-400 truncate">
           2. LIVE PIXEL OFFICE // THE OFFICE HQ (HD)
         </span>
@@ -941,15 +941,15 @@ export const PixelOfficeCanvas: React.FC<PixelOfficeCanvasProps> = ({
         </span>
       </div>
 
-      <div className="w-full flex-1 relative bg-[#1e1b2e] flex items-center justify-center overflow-hidden p-2">
+      <div className="w-full flex-1 min-h-0 relative bg-[#181526] flex items-center justify-center overflow-hidden p-1.5">
         <canvas
           ref={canvasRef}
           style={{ aspectRatio: '480 / 290' }}
-          className="w-full max-h-full h-auto block pixel-canvas rounded shadow-inner"
+          className="w-full max-h-full h-auto block pixel-canvas rounded shadow-lg"
         />
       </div>
 
-      <div className="gba-dialog text-[#1e1b2e] px-3.5 py-2.5 flex flex-col justify-between min-h-[112px] font-pixel">
+      <div className="gba-dialog text-[#1e1b2e] px-3.5 py-2 flex flex-col justify-between min-h-[104px] font-pixel shrink-0">
         <div className="flex items-center justify-between gap-2 border-b border-[#e2d6b5] pb-1">
           <span className="font-extrabold text-indigo-900 text-xs truncate">▶ {speaker}</span>
           <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-amber-200 text-amber-950 shrink-0">
