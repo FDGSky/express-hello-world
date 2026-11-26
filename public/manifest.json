@@ -1,0 +1,18 @@
+{
+  "name": "Mini Office AI — Multi-Agent HQ",
+  "short_name": "MiniOffice",
+  "description": "Pixel-Art Multi-AI Customer Service Office with Security Guard, 4-LLM Jury, and Boss Approval",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0f17",
+  "theme_color": "#0b0f17",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

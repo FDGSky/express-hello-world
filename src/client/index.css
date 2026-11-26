@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0b0f17;
+  --card: #131924;
+  --border: #263145;
+  --fg: #e6edf3;
+  --muted: #8b949e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg);
+  color: var(--fg);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.font-pixel {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.gba-frame {
+  border: 4px solid #1e1b2e;
+  box-shadow: inset 0 0 0 2px #6e6a86, 0 8px 0 #09080d;
+}
+
+.gba-dialog {
+  background: #fffdf5;
+  border-top: 4px solid #2b2640;
+  box-shadow: inset 0 0 0 3px #c8b89a;
+}
+
+.pixel-btn {
+  border: 2px solid #0f172a;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.35);
+  transition: transform 0.06s ease, filter 0.12s ease;
+}
+
+.pixel-btn:active {
+  transform: translateY(1px);
+}
+
+.phone-frame {
+  border: 3px solid #1f2937;
+  border-radius: 22px;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.48);
+  overflow: hidden;
+}
+
+.sms-bg {
+  background-color: #0b111a;
+  background-image: radial-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 0);
+  background-size: 16px 16px;
+}
+
+.boss-bg {
+  background-color: #0d1321;
+  background-image: radial-gradient(rgba(251, 191, 36, 0.05) 1px, transparent 0);
+  background-size: 18px 18px;
+}
+
+canvas.pixel-canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2b364d;
+  border-radius: 999px;
+}
